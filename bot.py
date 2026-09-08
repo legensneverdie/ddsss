@@ -2,8 +2,6 @@ import os
 import time
 import logging
 import requests
-from telegram import Bot
-from telegram.error import TelegramError
 
 logging.basicConfig(
     level=logging.INFO,
@@ -15,13 +13,12 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = os.getenv("CHANNEL_ID")  # e.g. @tonprices or -1001234567890
 INTERVAL_SECONDS = int(os.getenv("INTERVAL_SECONDS", "60"))
 
-COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price"
-COINGECKO_PARAMS = {"ids": "the-open-network", "vs_currencies": "usd"}
-
 if not BOT_TOKEN or not CHANNEL_ID:
     raise SystemExit("BOT_TOKEN и CHANNEL_ID должны быть заданы в переменных окружения")
 
-bot = Bot(token=BOT_TOKEN)
+COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price"
+COINGECKO_PARAMS = {"ids": "the-open-network", "vs_currencies": "usd"}
+TELEGRAM_API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
 
 def get_ton_price() -> float:
@@ -34,9 +31,16 @@ def get_ton_price() -> float:
 def post_price(price: float):
     text = f"{price:.2f}$"
     try:
-        bot.send_message(chat_id=CHANNEL_ID, text=text)
-        log.info(f"Posted: {text}")
-    except TelegramError as e:
+        resp = requests.post(
+            TELEGRAM_API_URL,
+            json={"chat_id": CHANNEL_ID, "text": text},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            log.info(f"Posted: {text}")
+        else:
+            log.error(f"Telegram API error {resp.status_code}: {resp.text}")
+    except requests.RequestException as e:
         log.error(f"Failed to send message: {e}")
 
 
